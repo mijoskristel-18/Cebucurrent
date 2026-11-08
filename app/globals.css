@@ -135,6 +135,7 @@ button{cursor:pointer}
 .admin-panel{margin:17px 0;padding:22px 25px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--shadow)}
 .panel-heading{display:flex;justify-content:space-between;align-items:center}
 .panel-heading h2{margin:3px 0;font:900 20px Nunito}
+.panel-actions{display:flex;align-items:center;gap:14px}
 .plain-close{border:0;background:transparent;color:var(--blue);font-size:11px;font-weight:800}
 .event-list{margin-top:14px}
 .event-row{display:flex;justify-content:space-between;gap:20px;padding:13px 0;border-top:1px solid var(--line)}

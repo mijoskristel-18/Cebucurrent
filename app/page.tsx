@@ -39,6 +39,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [eventsError, setEventsError] = useState("");
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [notifications, setNotifications] = useState<AccountNotification[]>([]);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [alertToast, setAlertToast] = useState<AccountNotification | null>(null);
@@ -61,8 +63,17 @@ export default function Home() {
     } catch { setSession({ configured: false, user: null }); }
   }
   async function loadEvents() {
-    const response = await fetch("/api/admin/events", { cache: "no-store" });
-    if (response.ok) setEvents((await response.json()).events);
+    try {
+      const response = await fetch("/api/admin/events", { cache: "no-store" });
+      const data = await response.json() as { events?: EventRow[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not retrieve sign-in activity.");
+      setEvents(Array.isArray(data.events) ? data.events : []);
+      setEventsError("");
+      setEventsLoaded(true);
+    } catch (error) {
+      setEventsError(error instanceof Error ? error.message : "Could not retrieve sign-in activity.");
+      setEventsLoaded(true);
+    }
   }
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -100,6 +111,12 @@ export default function Home() {
     const timer = window.setInterval(refresh, 12_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [session?.user?.email]);
+  useEffect(() => {
+    if (!adminOpen || !session?.user?.isAdmin) return;
+    void loadEvents();
+    const timer = window.setInterval(() => { void loadEvents(); }, 8_000);
+    return () => window.clearInterval(timer);
+  }, [adminOpen, session?.user?.isAdmin]);
   useEffect(() => {
     if (!alertToast) return;
     const timer = window.setTimeout(() => setAlertToast(null), 9000);
@@ -162,7 +179,7 @@ export default function Home() {
         {session?.user ? <>
           <span className="account-name">{session.user.email}</span>
           <button className="account-link" onClick={() => setAlertsOpen(true)}>My alerts <span className="count-pill">{notifications.length}</span></button>
-          {session.user.isAdmin && <button className="admin-link" onClick={async () => { setAdminOpen(!adminOpen); if (!adminOpen) await loadEvents(); }}>Newsroom</button>}
+          {session.user.isAdmin && <button className="admin-link" onClick={() => setAdminOpen(!adminOpen)}>Newsroom</button>}
           <button className="sign-in-button" onClick={signOut}>Sign out</button>
         </> : <button className="sign-in-button" onClick={openAuth}>Reader sign in <span>↗</span></button>}
       </div>
@@ -171,8 +188,8 @@ export default function Home() {
     <div className="ticker"><span className="ticker-label">THE ISLAND DESK</span><span>{feedNote}</span><button onClick={loadNews} aria-label="Refresh headlines">↻</button></div>
 
     {adminOpen && session?.user?.isAdmin && <section className="admin-panel" id="newsroom">
-      <div className="panel-heading"><div><span className="eyebrow">PRIVATE NEWSROOM</span><h2>Sign-in activity</h2></div><button className="plain-close" onClick={() => setAdminOpen(false)}>Close ×</button></div>
-      {events.length === 0 ? <p className="empty-copy">No failed sign-in attempts have been recorded.</p> : <div className="event-list">{events.map((item) => <article className="event-row" key={item.id}>
+      <div className="panel-heading"><div><span className="eyebrow">PRIVATE NEWSROOM</span><h2>Sign-in activity</h2><small>All reader accounts · updates automatically</small></div><div className="panel-actions"><button className="plain-close" onClick={() => void loadEvents()}>Refresh ↻</button><button className="plain-close" onClick={() => setAdminOpen(false)}>Close ×</button></div></div>
+      {eventsError ? <p className="empty-copy" role="alert">{eventsError}</p> : !eventsLoaded ? <p className="empty-copy">Loading sign-in activity…</p> : events.length === 0 ? <p className="empty-copy">No failed sign-in attempts have been recorded.</p> : <div className="event-list">{events.map((item) => <article className="event-row" key={item.id}>
         <div><strong>{item.event_type === "locked" ? "Account paused · 3 failed attempts" : item.event_type === "blocked" ? "Attempt blocked during cooldown" : "Failed password attempt"}</strong><span>{item.attempted_email}</span><small>{[item.city, item.region, item.country].filter(Boolean).join(", ") || "Location unavailable"} · {item.ip_address || "IP unavailable"}</small><small>{item.user_agent}</small></div><time>{dateLabel(item.created_at)}</time>
       </article>)}</div>}
       <p className="privacy-note">IP location is approximate. Browser details can be inaccurate or spoofed. Websites cannot read MAC addresses.</p>
